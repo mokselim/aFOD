@@ -6,7 +6,7 @@ from scipy.special import lpmv , factorial
 def cart2sph(x, y, z):
     
     res = np.zeros((x.size, 3), dtype=float)
-    r = np.sqrt((x * x) + (y * y) + (z * z))
+    r = np.sqrt(x**2 + y**2 + z**2)
     res[:, 0] = r   # radius
     r = np.where(r == 0, 1.0, r) # to resolve the 0 div problem
     res[:, 1] = np.arctan2(y, x)    # theta [-pi, pi]

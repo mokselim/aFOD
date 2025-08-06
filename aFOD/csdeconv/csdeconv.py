@@ -70,9 +70,9 @@ class Response(object):
         # Read input files
         bvals = np.genfromtxt(bvals_file, dtype=float)
         bvecs = np.genfromtxt(bvecs_file, dtype=float)
-        data = (nib.load(data_file)).get_data()
-        mask = (nib.load(mask_file)).get_data()
-        dti_V1 = (nib.load(dti_basename + '_V1.nii.gz')).get_data()
+        data = (nib.load(data_file)).get_fdata()
+        mask = (nib.load(mask_file)).get_fdata()
+        dti_V1 = (nib.load(dti_basename + '_V1.nii.gz')).get_fdata()
         vox_list = np.where(mask)
         print('Found ' + str(np.count_nonzero(mask)) + ' masked voxels')
 
@@ -252,9 +252,9 @@ def sdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
     # Load data
     bvals = np.genfromtxt(bvals_file, dtype=np.float32)
     bvecs = np.genfromtxt(bvecs_file, dtype=np.float32)
-    mask = (nib.load(mask_file)).get_data()
+    mask = (nib.load(mask_file)).get_fdata()
     data_obj = nib.load(data_file)
-    data = data_obj.get_data()
+    data = data_obj.get_fdata()
 
     # Get convolution matrix
     if isinstance(response, list):  # Multi-tissue
@@ -284,7 +284,7 @@ def sdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
 
 
 def csdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
-             prev_fod_file=None, sym=False, l=0.1, sigma=40, out_file=None):
+             prev_fod_file=None, sym=False, l=0.1, sigma=40, out_file=None, cpus=None):
     '''Constrained spherical deconvolution.
 
     Estimates symmetric or asymmetric voxel-wise FOD using constrained
@@ -308,16 +308,23 @@ def csdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
         l: lambda regularization factor for asymmetric CSD.
         sigma: cut-off neighbourhood angle for asymmetric CSD.
         out_file: string containing the output file name (optional).
+        cpus: number of processes to parallelise csdeconv across (optional).
 
     Returns:
         4D numpy array of SH coefficients.
     '''
+    # Check if the number of processes is specified
+    if cpus is not None:
+        nprocs = cpus
+    else:
+        nprocs = mp.cpu_count()
+
     # Load data
     bvals = np.genfromtxt(bvals_file, dtype=np.float32)
     bvecs = np.genfromtxt(bvecs_file, dtype=np.float32)
-    mask = (nib.load(mask_file)).get_data()
+    mask = (nib.load(mask_file)).get_fdata()
     data_obj = nib.load(data_file)
-    data = data_obj.get_data()
+    data = data_obj.get_fdata()
 
     # Get list of masked voxels
     mask[:, :, 0] = 0
@@ -365,7 +372,7 @@ def csdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
             C = np.concatenate((C, l*B_C_sh), axis=0)
             prev_fod = np.zeros(list(mask.shape) + [B_sh.shape[1]], dtype=np.float32)
             if prev_fod_file is not None:
-                prev_fod[:, :, :, 0:B_sh_list[0].shape[1]] = ((nib.load(prev_fod_file)).get_data())[:, :, :, 0:B_sh_list[0].shape[1]]
+                prev_fod[:, :, :, 0:B_sh_list[0].shape[1]] = ((nib.load(prev_fod_file)).get_fdata())[:, :, :, 0:B_sh_list[0].shape[1]]
             else:
                 print('Running SD')
                 prev_fod[:, :, :, 0:B_sh_list[0].shape[1]] = sdeconv(response[0], data_file, mask_file, bvals_file, bvecs_file, max_order[0], sym=sym)
@@ -374,7 +381,7 @@ def csdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
             l = l * (response.get_rh())[0, 0]
             C = np.concatenate((C, l*B_sh), axis=0)
             if prev_fod_file is not None:
-                prev_fod = (nib.load(prev_fod_file)).get_data()
+                prev_fod = (nib.load(prev_fod_file)).get_fdata()
             else:
                 print('Running SD')
                 prev_fod = sdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order, sym=sym)
@@ -421,7 +428,7 @@ def csdeconv(response, data_file, mask_file, bvals_file, bvecs_file, max_order,
                 for xs, ys, zs in zip(iixs, iiys, iizs)]
 
     # csdeconv_fit((x, y, z), fod.shape, data.shape, bvals, H, C, B_sh, sym, B_neg_sh, w, l)
-
+ 
     print('Running CSD (using {} processes)'.format(nprocs), flush=True)
 
     # Create a progress bar to show progress,
@@ -538,9 +545,9 @@ def predict(response, fod_file, mask_file, bvals_file, bvecs_file, max_order, sy
     # Load data
     bvals = np.genfromtxt(bvals_file, dtype=np.float32)
     bvecs = np.genfromtxt(bvecs_file, dtype=np.float32)
-    mask = (nib.load(mask_file)).get_data()
+    mask = (nib.load(mask_file)).get_fdata()
     fod_obj = nib.load(fod_file)
-    fod = fod_obj.get_data()
+    fod = fod_obj.get_fdata()
 
     # Get CSD matrices
     if isinstance(response, list):  # Multi-tissue
